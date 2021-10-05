@@ -1,0 +1,100 @@
+﻿@page "{id:Guid}"
+@model DetailsModel
+
+@{
+    ViewData["Title"] = "Course Details";
+}
+
+<h3>Course Details</h3>
+
+<hr />
+
+<div>
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Id)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.Id)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.CustomerFullName)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.CustomerFullName)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.ProductName)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.ProductName)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Amount)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.Amount)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Status)
+        </dt>
+        <dd class="col-sm-10">
+            <span class="btn-sm @Model.GetStatusBackgroundColor(Model.Course.Status)">
+                @Html.DisplayFor(model => model.Course.Status)
+            </span>
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.TransactionId)
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Course.TransactionId != Guid.Empty)
+            {
+                @Html.DisplayFor(model => model.Course.TransactionId)
+            }
+            else
+            {
+                <span>---</span>
+            }
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Queued)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.Queued)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Requeued)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.Requeued)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.Processed)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.Processed)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.CreatedAt)
+        </dt>
+        <dd class="col-sm-10">
+            @Html.DisplayFor(model => model.Course.CreatedAt)
+        </dd>
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Course.UpdatedAt)
+        </dt>
+        <dd class="col-sm-10">
+            @if (Model.Course.UpdatedAt.HasValue)
+            {
+                @Html.DisplayFor(model => model.Course.UpdatedAt)
+            }
+            else
+            {
+                <span>---</span>
+            }
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-page="./Index" class="btn btn-outline-info">Back to List</a>
+</div>

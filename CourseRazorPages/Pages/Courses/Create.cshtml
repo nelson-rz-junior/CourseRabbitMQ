@@ -1,0 +1,41 @@
+﻿@page
+@model CreateModel
+
+@{
+    ViewData["Title"] = "Create Course";
+}
+
+<h3>Create Course</h3>
+
+<hr />
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="Course.CustomerFullName" class="control-label"></label>
+                <input asp-for="Course.CustomerFullName" class="form-control" />
+                <span asp-validation-for="Course.CustomerFullName" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Course.ProductName" class="control-label"></label>
+                <input asp-for="Course.ProductName" class="form-control" />
+                <span asp-validation-for="Course.ProductName" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Course.Amount" class="control-label"></label>
+                <input asp-for="Course.Amount" class="form-control" />
+                <span asp-validation-for="Course.Amount" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-outline-primary" />
+                <a asp-page="./Index" class="btn btn-outline-info">Back to List</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

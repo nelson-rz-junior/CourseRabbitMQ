@@ -1,0 +1,101 @@
+﻿@page
+@using CourseDataAccess.Models
+
+@model IndexModel
+
+@{
+    ViewData["Title"] = "Courses";
+}
+
+<div class="row">
+    <div class="col">
+        <h3>Courses</h3>
+    </div>
+    <div class="col">
+        <p align="right">
+            <a asp-page="Create" class="btn btn-outline-info">Create New</a>
+        </p>
+    </div>
+</div>
+
+@if (TempData["BoxMessage"] != null)
+{
+    <div class="alert @TempData["BoxStyle"] alert-dismissible fade show" role="alert">
+        @TempData["BoxMessage"]
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+}
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th width="20%">
+                @Html.DisplayNameFor(model => model.Courses[0].CustomerFullName)
+            </th>
+            <th width="15%">
+                @Html.DisplayNameFor(model => model.Courses[0].ProductName)
+            </th>
+            <th width="10%">
+                @Html.DisplayNameFor(model => model.Courses[0].Amount)
+            </th>
+            <th width="10%">
+                @Html.DisplayNameFor(model => model.Courses[0].Status)
+            </th>
+            <th width="40%">
+                @Html.DisplayNameFor(model => model.Courses[0].TransactionId)
+            </th>
+            <th width="5%"></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model.Courses.Any())
+        {
+            foreach (var item in Model.Courses)
+            {
+                <tr>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.CustomerFullName)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.ProductName)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Amount)
+                    </td>
+                    <td>
+                        <span class="btn btn-sm @Model.GetStatusBackgroundColor(item.Status)">@item.Status</span>
+                    </td>
+                    <td>
+                        @if (item.TransactionId != Guid.Empty)
+                        {
+                            @Html.DisplayFor(modelItem => item.TransactionId)
+                        }
+                        else
+                        {
+                            <span>---</span>
+                        }
+                    </td>
+                    <td align="center">
+                        <a asp-page="./Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary mb-1 w-100">Details</a>
+
+                        <form method="post">
+                            <input type="hidden" name="id" value="@item.Id" />
+                            @if (!item.Requeued && item.Status == Status.Error.ToString())
+                            {
+                                <input type="submit" class="btn btn-sm btn-outline-danger" value="Requeue" />
+                            }
+                        </form>
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td align="center" colspan="7">No items found</td>
+            </tr>
+        }
+    </tbody>
+</table>
