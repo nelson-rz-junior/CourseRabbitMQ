@@ -1,13 +1,14 @@
 ﻿using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace CourseConsumerProducer
 {
     public static class RabbitMQService
     {
         public static IConnection GetRabbitMqConnection()
-        {
+        {   
             var factory = new ConnectionFactory
             {
                 HostName = "localhost",
@@ -25,16 +26,16 @@ namespace CourseConsumerProducer
             channel.QueueBind(queue, exchange, "", null);
         }
 
-        public static int GetRetryCount(IBasicProperties messageProperties, string countHeader)
+        public static int GetRetryCount(string customHeaderName, IBasicProperties messageProperties)
         {
             int count = 0;
 
             IDictionary<string, object> headers = messageProperties.Headers;
             if (headers != null)
             {
-                if (headers.ContainsKey(countHeader))
+                if (headers.ContainsKey(customHeaderName))
                 {
-                    string countAsString = Convert.ToString(headers[countHeader]);
+                    string countAsString = Convert.ToString(headers[customHeaderName]);
                     count = Convert.ToInt32(countAsString);
                 }
             }
@@ -42,20 +43,33 @@ namespace CourseConsumerProducer
             return count;
         }
 
-        public static IDictionary<string, object> CopyHeaders(IBasicProperties originalProperties)
+        public static IBasicProperties AddCustomHeader(string customHeaderName, ref int retryCount, IModel channel, IBasicProperties originalProperties)
         {
-            IDictionary<string, object> dict = new Dictionary<string, object>();
+            IDictionary<string, object> headersCopy = new Dictionary<string, object>();
 
             IDictionary<string, object> headers = originalProperties.Headers;
             if (headers != null)
             {
                 foreach (KeyValuePair<string, object> kvp in headers)
                 {
-                    dict[kvp.Key] = kvp.Value;
+                    headersCopy[kvp.Key] = kvp.Value;
                 }
             }
 
-            return dict;
+            IBasicProperties properties = channel.CreateBasicProperties();
+            properties.Headers = headersCopy;
+            properties.Headers[customHeaderName] = ++retryCount;
+
+            return properties;
+        }
+
+        public static void PublishQueue(string exchange, string queue, string message, IModel channel, IBasicProperties properties, Dictionary<string, object> arguments)
+        {
+            SetupInitialQueue(exchange, queue, channel, arguments);
+
+            var body = Encoding.UTF8.GetBytes(message);
+
+            channel.BasicPublish(exchange, "", properties, body);
         }
     }
 }

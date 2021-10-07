@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Data.SqlClient;
+using System.Text.Json;
 using static System.Console;
 
 namespace CourseConsumerProducer
@@ -59,25 +61,18 @@ namespace CourseConsumerProducer
             channel.BasicConsume(ORDER_QUEUE, true, consumer);
         }
 
-        static async Task<Course> UpdateCourseStatus(string message, IModel channel, BasicDeliverEventArgs args, ICourseRepository courseRepository)
+        static async Task UpdateCourseStatus(string message, IModel channel, BasicDeliverEventArgs args, ICourseRepository courseRepository)
         {
-            Guid id = Guid.Empty;
-
-            Course result = null;
-
             try
             {
                 var rnd = new Random();
 
-                var course = System.Text.Json.JsonSerializer.Deserialize<Course>(message);
+                var course = JsonSerializer.Deserialize<Course>(message);
                 if (course != null)
                 {
-                    id = course.Id;
-
                     var dbCourse = await courseRepository.Find(course.Id);
                     if (dbCourse != null)
                     {
-                        dbCourse.Requeued = false;
                         dbCourse.Processed = true;
                         dbCourse.UpdatedAt = DateTime.Now;
 
@@ -90,88 +85,117 @@ namespace CourseConsumerProducer
                         else
                         {
                             // Simulate error
-                            dbCourse.Status = Status.Error.ToString();
-                            dbCourse.TransactionId = Guid.Empty;
+                            throw new Exception("Fake error");
                         }
 
                         await courseRepository.Update(dbCourse);
 
-                        // Throw exception
-                        if (dbCourse.Status == Status.Error.ToString())
-                        {
-                            throw new Exception("Fake error");
-                        }
+                        RabbitMQService.PublishQueue(TRANSACTION_EXCHANGE, TRANSACTION_QUEUE, JsonSerializer.Serialize(dbCourse), channel, null, null);
 
                         WriteLine("Message APPROVED: {0} \n", message);
-
-                        PublishTransaction(dbCourse, channel);
-
-                        result = dbCourse;
                     }
+                }
+            }
+            catch (JsonException)
+            {
+                // Message must be rejected, cannot process
+                RabbitMQService.PublishQueue(ERROR_EXCHANGE, ERROR_QUEUE, message, channel, null, null);
+
+                WriteLine("Message {0} has malformed. It will be REJECTED. \n", message);
+            }
+            catch (SqlException sqlEx)
+            {
+                var course = JsonSerializer.Deserialize<Course>(message);
+                if (course != null)
+                {
+                    int retryCount = RabbitMQService.GetRetryCount(CUSTOM_RETRY_HEADER_NAME, args.BasicProperties);
+                    if (retryCount < MAX_NUMBER_OF_RETRIES)
+                    {
+                        // Message thrown back at queue for retry
+                        var arguments = new Dictionary<string, object>
+                        {
+                            { "x-dead-letter-exchange", ORDER_EXCHANGE },
+                            { "x-message-ttl", RETRY_DELAY }
+                        };
+
+                        IBasicProperties properties = RabbitMQService.AddCustomHeader(CUSTOM_RETRY_HEADER_NAME, ref retryCount, channel, args.BasicProperties);
+                        RabbitMQService.PublishQueue(RETRY_EXCHANGE, RETRY_QUEUE, message, channel, properties, arguments);
+
+                        WriteLine("Message {0} thrown back at queue for RETRY. New retry count: {1} \n", message, retryCount);
+                    }
+                    else
+                    {
+                        // Message must be rejected, cannot process
+                        course.ErrorMessage = sqlEx.Message;
+                        course.Retry = retryCount;
+                        course.Processed = true;
+                        course.Error = true;
+                        course.Status = Status.Error.ToString();
+                        course.UpdatedAt = DateTime.Now;
+
+                        RabbitMQService.PublishQueue(ERROR_EXCHANGE, ERROR_QUEUE, JsonSerializer.Serialize(course), channel, null, null);
+
+                        WriteLine("Message {0} has reached the max number of retries. It will be REJECTED. \n", message);
+                    }
+                }
+                else
+                {
+                    RabbitMQService.PublishQueue(ERROR_EXCHANGE, ERROR_QUEUE, message, channel, null, null);
                 }
             }
             catch (Exception ex)
             {
-                int retryCount = RabbitMQService.GetRetryCount(args.BasicProperties, CUSTOM_RETRY_HEADER_NAME);
-                if (retryCount < MAX_NUMBER_OF_RETRIES)
+                var course = JsonSerializer.Deserialize<Course>(message);
+                if (course != null)
                 {
-                    // Accept message, but create copy and throw back
-                    IDictionary<string, object> headersCopy = RabbitMQService.CopyHeaders(args.BasicProperties);
+                    var dbCourse = await courseRepository.Find(course.Id);
+                    if (dbCourse != null)
+                    {
+                        int retryCount = RabbitMQService.GetRetryCount(CUSTOM_RETRY_HEADER_NAME, args.BasicProperties);
+                        if (retryCount < MAX_NUMBER_OF_RETRIES)
+                        {
+                            // Message thrown back at queue for retry
+                            var arguments = new Dictionary<string, object>
+                            {
+                                { "x-dead-letter-exchange", ORDER_EXCHANGE },
+                                { "x-message-ttl", RETRY_DELAY }
+                            };
 
-                    IBasicProperties propertiesForCopy = channel.CreateBasicProperties();
-                    propertiesForCopy.Headers = headersCopy;
-                    propertiesForCopy.Headers[CUSTOM_RETRY_HEADER_NAME] = ++retryCount;
+                            IBasicProperties properties = RabbitMQService.AddCustomHeader(CUSTOM_RETRY_HEADER_NAME, ref retryCount, channel, args.BasicProperties);
 
-                    PublishRetryQueue(message, propertiesForCopy, channel);
+                            dbCourse.Status = Status.Processing.ToString();
+                            dbCourse.Retry = retryCount;
+                            dbCourse.UpdatedAt = DateTime.Now;
 
-                    WriteLine("Message {0} thrown back at queue for RETRY. New retry count: {1} \n", message, retryCount);
+                            await courseRepository.Update(dbCourse);
+
+                            RabbitMQService.PublishQueue(RETRY_EXCHANGE, RETRY_QUEUE, JsonSerializer.Serialize(dbCourse), channel, properties, arguments);
+
+                            WriteLine("Message {0} thrown back at queue for RETRY. New retry count: {1} \n", message, retryCount);
+                        }
+                        else
+                        {
+                            // Messagte must be rejected, cannot process
+                            dbCourse.ErrorMessage = ex.Message;
+                            dbCourse.Retry = retryCount;
+                            dbCourse.Processed = true;
+                            dbCourse.Error = true;
+                            dbCourse.Status = Status.Error.ToString();
+                            dbCourse.UpdatedAt = DateTime.Now;
+
+                            await courseRepository.Update(dbCourse);
+
+                            RabbitMQService.PublishQueue(ERROR_EXCHANGE, ERROR_QUEUE, JsonSerializer.Serialize(dbCourse), channel, null, null);
+
+                            WriteLine("Message {0} has reached the max number of retries. It will be REJECTED. \n", message);
+                        }
+                    }
                 }
                 else
                 {
-                    // Must be rejected, cannot process
-                    WriteLine("Message {0} has reached the max number of retries. It will be REJECTED. \n", message);
-
-                    var error = new { Id = id, ErrorMessage = ex.Message, ErrorDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") };
-
-                    PublishErrorQueue(System.Text.Json.JsonSerializer.Serialize(error), channel);
+                    RabbitMQService.PublishQueue(ERROR_EXCHANGE, ERROR_QUEUE, message, channel, null, null);
                 }
             }
-
-            return result;
-        }
-
-        static void PublishTransaction(Course course, IModel channel)
-        {
-            RabbitMQService.SetupInitialQueue(TRANSACTION_EXCHANGE, TRANSACTION_QUEUE, channel, null);
-
-            string message = System.Text.Json.JsonSerializer.Serialize(course);
-            var body = Encoding.UTF8.GetBytes(message);
-
-            channel.BasicPublish(TRANSACTION_EXCHANGE, "", null, body);
-        }
-
-        static void PublishRetryQueue(string message, IBasicProperties basicProperties, IModel channel)
-        {
-            var queueArgs = new Dictionary<string, object> 
-            {
-                { "x-dead-letter-exchange", ORDER_EXCHANGE },
-                { "x-message-ttl", RETRY_DELAY }
-            };
-
-            RabbitMQService.SetupInitialQueue(RETRY_EXCHANGE, RETRY_QUEUE, channel, queueArgs);
-
-            var body = Encoding.UTF8.GetBytes(message);
-
-            channel.BasicPublish(RETRY_EXCHANGE, "", basicProperties, body);
-        }
-
-        static void PublishErrorQueue(string message, IModel channel)
-        {
-            RabbitMQService.SetupInitialQueue(ERROR_EXCHANGE, ERROR_QUEUE, channel, null);
-
-            var body = Encoding.UTF8.GetBytes(message);
-
-            channel.BasicPublish(ERROR_EXCHANGE, "", null, body);
         }
     }
 }

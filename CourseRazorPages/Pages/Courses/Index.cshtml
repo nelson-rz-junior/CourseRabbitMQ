@@ -79,14 +79,6 @@
                     </td>
                     <td align="center">
                         <a asp-page="./Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary mb-1 w-100">Details</a>
-
-                        <form method="post">
-                            <input type="hidden" name="id" value="@item.Id" />
-                            @if (!item.Requeued && item.Status == Status.Error.ToString())
-                            {
-                                <input type="submit" class="btn btn-sm btn-outline-danger" value="Requeue" />
-                            }
-                        </form>
                     </td>
                 </tr>
             }

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CourseDataAccess.Models
 {
-    public enum Status { Pending, Approved, Error }
+    public enum Status { Pending, Processing, Approved, Error }
 
     public class Course
     {
@@ -31,7 +31,10 @@ namespace CourseDataAccess.Models
 
         public bool Queued { get; set; }
 
-        public bool Requeued { get; set; }
+        public bool Error { get; set; }
+
+        [Display(Name = "Retry Count")]
+        public int Retry { get; set; }
 
         public bool Processed { get; set; }
 
@@ -42,5 +45,8 @@ namespace CourseDataAccess.Models
         [DisplayFormat(DataFormatString = "{0:dd-MM-yyyy HH:mm:ss}")]
         [Display(Name = "Updated At")]
         public DateTime? UpdatedAt { get; set; }
+
+        [NotMapped]
+        public string ErrorMessage { get; set; }
     }
 }
